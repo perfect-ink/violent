@@ -16,6 +16,15 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(JUCE)
 
+# Shared Perfect Ink look (tokens and a JUCE LookAndFeel), from kriogenx0/volta-native.
+FetchContent_Declare(
+    VoltaNative
+    GIT_REPOSITORY https://github.com/kriogenx0/volta-native.git
+    GIT_TAG        main
+    GIT_SHALLOW    TRUE
+)
+FetchContent_MakeAvailable(VoltaNative)
+
 # Suppress deprecation warnings from JUCE's own sources (e.g. CVDisplayLink on macOS 14+)
 set_property(DIRECTORY "${juce_SOURCE_DIR}" APPEND PROPERTY
     COMPILE_OPTIONS "-Wno-deprecated-declarations")
@@ -84,6 +93,7 @@ target_compile_definitions(Violent
 
 target_link_libraries(Violent
     PRIVATE
+        volta::juce
         juce::juce_audio_utils
         juce::juce_dsp
     PUBLIC
@@ -133,6 +143,7 @@ target_compile_definitions(ViolentTests
 target_link_libraries(ViolentTests
     PRIVATE
         Violent
+        volta::juce
         juce::juce_audio_utils
         juce::juce_dsp
     PUBLIC

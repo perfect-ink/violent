@@ -3,6 +3,11 @@
 Open items as of 2026-10-10. Nothing here blocks anything.
 
 ## Check by hand
+- **Volta look (2026-11-19).** Violent now draws with the shared volta-native LookAndFeel and follows macOS
+  light and dark. It was only syntax-checked on Linux, never built or looked at. Check `make dev` in both
+  appearances, switch appearance with the window open (`ViolentUI::refreshColours` remaps colours views set
+  explicitly), and check the muted module colours read well in light mode. The standalone window's own
+  background still comes from JUCE's default LookAndFeel.
 - **Real pointer.** The "controls drift from their click areas" fix (1f971e7) was verified by driving the
   real standalone window with synthetic events and comparing its pixels, not with a physical
   mouse/trackpad. Worth a manual try: add a few components, click the buttons below them.

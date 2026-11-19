@@ -5,23 +5,59 @@
 //==============================================================================
 ViolentUI::ViolentUI()
 {
-    setColour (juce::ResizableWindow::backgroundColourId,       ViolentColours::background);
-    setColour (juce::Label::textColourId,                       ViolentColours::text);
-    setColour (juce::Slider::thumbColourId,                     ViolentColours::accent);
-    setColour (juce::Slider::trackColourId,                     ViolentColours::surface);
-    setColour (juce::Slider::backgroundColourId,                ViolentColours::surface);
-    setColour (juce::ToggleButton::textColourId,                ViolentColours::text);
-    setColour (juce::TextButton::buttonColourId,                ViolentColours::surface);
-    setColour (juce::TextButton::buttonOnColourId,              ViolentColours::accent);
-    setColour (juce::TextButton::textColourOffId,               ViolentColours::subtext);
-    setColour (juce::TextButton::textColourOnId,                ViolentColours::background);
-    setColour (juce::ComboBox::backgroundColourId,              ViolentColours::surface);
-    setColour (juce::ComboBox::textColourId,                    ViolentColours::text);
-    setColour (juce::ComboBox::outlineColourId,                 ViolentColours::overlay);
-    setColour (juce::PopupMenu::backgroundColourId,             ViolentColours::surface);
-    setColour (juce::PopupMenu::textColourId,                   ViolentColours::text);
-    setColour (juce::PopupMenu::highlightedBackgroundColourId,  ViolentColours::accent);
-    setColour (juce::PopupMenu::highlightedTextColourId,        ViolentColours::background);
+    ViolentColours::apply (ViolentColours::make (palette(), getAccent(), isDark()));
+}
+
+namespace
+{
+    // Colour IDs that Violent's views set explicitly from ViolentColours.
+    constexpr int remappedColourIds[] = {
+        juce::Label::textColourId, juce::Label::backgroundColourId,
+        juce::TextButton::buttonColourId, juce::TextButton::buttonOnColourId,
+        juce::TextButton::textColourOffId, juce::TextButton::textColourOnId,
+        juce::Slider::rotarySliderFillColourId, juce::Slider::thumbColourId,
+        juce::Slider::trackColourId, juce::Slider::textBoxTextColourId,
+    };
+
+    void remapColours (juce::Component& c, const ViolentColours::Set& from, const ViolentColours::Set& to)
+    {
+        const std::pair<juce::Colour, juce::Colour> pairs[] = {
+            { from.background, to.background }, { from.surface, to.surface }, { from.overlay, to.overlay },
+            { from.text, to.text }, { from.subtext, to.subtext }, { from.accent, to.accent },
+            { from.green, to.green }, { from.red, to.red }, { from.yellow, to.yellow },
+            { from.blue, to.blue }, { from.teal, to.teal },
+        };
+
+        for (auto id : remappedColourIds)
+        {
+            if (! c.isColourSpecified (id))
+                continue;
+
+            const auto colour = c.findColour (id);
+            for (const auto& [oldColour, newColour] : pairs)
+            {
+                // Match on RGB so colours set with withAlpha() follow too.
+                if (colour.withAlpha (1.0f) == oldColour.withAlpha (1.0f))
+                {
+                    c.setColour (id, newColour.withAlpha (colour.getFloatAlpha()));
+                    break;
+                }
+            }
+        }
+
+        for (auto* child : c.getChildren())
+            remapColours (*child, from, to);
+    }
+}
+
+void ViolentUI::refreshColours (juce::Component& root)
+{
+    const auto before = ViolentColours::current();
+    const auto after  = ViolentColours::make (palette(), getAccent(), isDark());
+    ViolentColours::apply (after);
+    remapColours (root, before, after);
+    root.sendLookAndFeelChange();
+    root.repaint();
 }
 
 void ViolentUI::drawRotarySlider (juce::Graphics& g,
@@ -29,101 +65,72 @@ void ViolentUI::drawRotarySlider (juce::Graphics& g,
     float sliderPos, float rotaryStartAngle, float rotaryEndAngle,
     juce::Slider& slider)
 {
-    // Margin leaves just enough room around the knob body for the hover glow
-    // below to render without being clipped by the slider's own bounds.
-    const float radius  = static_cast<float> (juce::jmin (width, height)) * 0.5f - 3.0f;
-    const float centreX = static_cast<float> (x) + static_cast<float> (width)  * 0.5f;
-    const float centreY = static_cast<float> (y) + static_cast<float> (height) * 0.5f;
-    const float rx = centreX - radius, ry = centreY - radius, rw = radius * 2.0f;
-    const float angle = rotaryStartAngle + sliderPos * (rotaryEndAngle - rotaryStartAngle);
-
-    // The knob's own assigned colour (set via LabelledKnob's constructor or
-    // setAccentColour()) is what it reads "hot" as — falls back to the
-    // global accent for any slider that never had one assigned.
-    juce::Colour hot = slider.findColour (juce::Slider::rotarySliderFillColourId, false);
-    if (! hot.isOpaque()) hot = ViolentColours::accent;
-
-    const bool  wantsGlow = slider.isEnabled() && (slider.isMouseOver (true) || slider.isMouseButtonDown());
-    const float glow = animatedHoverAmount (slider, wantsGlow);
-    if (glow > 0.001f)
-    {
-        // Subtle glow: a few soft, low-alpha rings just outside the knob body,
-        // drawn before the body itself so only the outer ring shows through.
-        for (int i = 3; i >= 1; --i)
-        {
-            const float glowR = radius + (float) i;
-            g.setColour (hot.withAlpha (0.045f * (float) (4 - i) * glow));
-            g.fillEllipse (centreX - glowR, centreY - glowR, glowR * 2.0f, glowR * 2.0f);
-        }
-    }
-
-    g.setColour (ViolentColours::overlay);
-    g.fillEllipse (rx, ry, rw, rw);
-
-    juce::Path trackArc;
-    trackArc.addCentredArc (centreX, centreY, radius - 3.0f, radius - 3.0f,
-                             0.0f, rotaryStartAngle, rotaryEndAngle, true);
-    g.setColour (ViolentColours::surface);
-    g.strokePath (trackArc, juce::PathStrokeType (3.0f, juce::PathStrokeType::curved,
-                                                   juce::PathStrokeType::rounded));
-
-    // Knobs read hot (their assigned colour) the further they're turned up,
-    // and cool (muted grey) near the bottom of their range.
-    const juce::Colour arc = ViolentColours::subtext.interpolatedWith (hot, sliderPos);
-
-    juce::Path valArc;
-    valArc.addCentredArc (centreX, centreY, radius - 3.0f, radius - 3.0f,
-                          0.0f, rotaryStartAngle, angle, true);
-    g.setColour (arc);
-    g.strokePath (valArc, juce::PathStrokeType (3.0f, juce::PathStrokeType::curved,
-                                                 juce::PathStrokeType::rounded));
+    // The Volta knob: thin track, value arc in the knob's own colour (set via
+    // LabelledKnob's constructor or setAccentColour(), else the accent), flat disc.
+    VoltaLookAndFeel::drawRotarySlider (g, x, y, width, height, sliderPos, rotaryStartAngle, rotaryEndAngle, slider);
 }
 
 void ViolentUI::drawLinearSlider (juce::Graphics& g,
     int x, int y, int width, int height,
-    float sliderPos, float, float,
+    float sliderPos, float minPos, float maxPos,
     juce::Slider::SliderStyle style, juce::Slider& slider)
 {
-    if (style != juce::Slider::LinearVertical) return;
-    const float trackW  = 6.0f;
+    if (style != juce::Slider::LinearVertical)
+    {
+        VoltaLookAndFeel::drawLinearSlider (g, x, y, width, height, sliderPos, minPos, maxPos, style, slider);
+        return;
+    }
+
+    // Centre-detented fader: fills up or down from the middle.
+    const float trackW  = 3.0f;
     const float centreX = (float) x + (float) width * 0.5f;
     const float top     = (float) y + 8.0f;
     const float bot     = (float) (y + height) - 8.0f;
     const float mid     = top + (bot - top) * 0.5f;
+    const float alpha   = slider.isEnabled() ? 1.0f : (float) VOLTA_OPACITY_DISABLED;
 
-    g.setColour (ViolentColours::overlay);
-    g.fillRoundedRectangle (centreX - trackW * 0.5f, top, trackW, bot - top, 3.0f);
-    g.setColour (ViolentColours::subtext);
-    g.drawHorizontalLine ((int) mid, centreX - 8.0f, centreX + 8.0f);
+    g.setColour (ViolentColours::overlay.withMultipliedAlpha (alpha));
+    g.fillRoundedRectangle (centreX - trackW * 0.5f, top, trackW, bot - top, trackW * 0.5f);
+    g.setColour (volta::divider (palette()));
+    g.drawHorizontalLine ((int) mid, centreX - 6.0f, centreX + 6.0f);
 
-    juce::Colour fill = slider.findColour (juce::Slider::rotarySliderFillColourId, false);
-    if (!fill.isOpaque()) fill = ViolentColours::accent;
-    if (sliderPos < mid)
-        { g.setColour (fill); g.fillRoundedRectangle (centreX - trackW * 0.5f, sliderPos, trackW, mid - sliderPos, 3.0f); }
-    else
-        { g.setColour (fill.withAlpha (0.6f)); g.fillRoundedRectangle (centreX - trackW * 0.5f, mid, trackW, sliderPos - mid, 3.0f); }
+    const juce::Colour fill = valueColour (slider).withMultipliedAlpha (alpha);
+    g.setColour (sliderPos < mid ? fill : fill.withMultipliedAlpha (0.6f));
+    g.fillRoundedRectangle (centreX - trackW * 0.5f, juce::jmin (sliderPos, mid), trackW, std::abs (mid - sliderPos), trackW * 0.5f);
 
-    g.setColour (ViolentColours::text);
-    g.fillRoundedRectangle (centreX - 11.0f, sliderPos - 6.0f, 22.0f, 12.0f, 3.0f);
+    // Flat thumb with a hairline edge, darker edge on hover.
+    const auto thumb = juce::Rectangle<float> (20.0f, 10.0f).withCentre ({ centreX, sliderPos });
+    g.setColour (palette().surface.withMultipliedAlpha (alpha));
+    g.fillRoundedRectangle (thumb, (float) VOLTA_RADIUS_CHECKBOX);
+    const bool active = slider.isEnabled() && slider.isMouseOverOrDragging();
+    g.setColour (palette().secondary.withAlpha ((active ? 0.5f : (float) VOLTA_OPACITY_DIVIDER) * alpha));
+    g.drawRoundedRectangle (thumb.reduced (0.5f), (float) VOLTA_RADIUS_CHECKBOX, 1.0f);
 }
 
 void ViolentUI::paintControlShape (juce::Graphics& g, juce::Component& c, juce::Rectangle<float> b,
                                              bool isOn, bool isHovered)
 {
     const float hover = animatedHoverAmount (c, isHovered);
+    const float alpha = c.isEnabled() ? 1.0f : (float) VOLTA_OPACITY_DISABLED;
 
     // A component's own buttonOnColourId (e.g. set by GeneratorCard to its
     // per-generator accent) wins over the global accent if it's been set.
     juce::Colour on = c.findColour (juce::TextButton::buttonOnColourId, false);
     if (! on.isOpaque()) on = ViolentColours::accent;
 
-    g.setColour (isOn ? on
-                       : ViolentColours::surface.interpolatedWith (ViolentColours::overlay, hover));
+    // Volta control: faint fill and hairline border; "on" is a light tint of the
+    // control's colour rather than a solid block.
+    const auto& p = palette();
+    const float restFill  = (float) VOLTA_OPACITY_CONTROL_FILL;
+    const float hoverFill = (float) VOLTA_OPACITY_CONTROL_FILL_HOVER;
+    const float fill = restFill + (hoverFill - restFill) * hover;
+
+    g.setColour ((isOn ? on.withAlpha (hoverFill + 0.06f * hover) : p.secondary.withAlpha (fill)).withMultipliedAlpha (alpha));
     g.fillRoundedRectangle (b, ViolentColours::cornerRadius);
 
-    juce::Colour border = isOn ? on.brighter (0.2f) : ViolentColours::overlay;
-    border = border.brighter (0.35f * hover);
-    g.setColour (border);
+    const float divider = (float) VOLTA_OPACITY_DIVIDER;
+    const float borderAlpha = divider + (0.5f - divider) * hover;
+    g.setColour ((isOn ? on.withAlpha (borderAlpha + 0.1f) : p.secondary.withAlpha (borderAlpha)).withMultipliedAlpha (alpha));
     g.drawRoundedRectangle (b, ViolentColours::cornerRadius, 1.0f);
 }
 
@@ -133,8 +140,10 @@ void ViolentUI::drawToggleButton (juce::Graphics& g, juce::ToggleButton& btn,
     const bool on = btn.getToggleState();
     const auto b  = btn.getLocalBounds().toFloat().reduced (1.0f);
     paintControlShape (g, btn, b, on, highlighted);
-    g.setColour (on ? ViolentColours::background : ViolentColours::text);
-    g.setFont (juce::Font (juce::FontOptions().withName ("SF Pro Text").withHeight (12.0f).withStyle ("Bold")));
+    juce::Colour onColour = btn.findColour (juce::TextButton::buttonOnColourId, false);
+    if (! onColour.isOpaque()) onColour = ViolentColours::accent;
+    g.setColour ((on ? onColour : ViolentColours::text).withMultipliedAlpha (btn.isEnabled() ? 1.0f : (float) VOLTA_OPACITY_DISABLED));
+    g.setFont (juce::Font (juce::FontOptions().withName ("SF Pro Text").withHeight (12.0f).withStyle ("Medium")));
     g.drawFittedText (btn.getButtonText(), btn.getLocalBounds(), juce::Justification::centred, 1);
 }
 
@@ -143,6 +152,22 @@ void ViolentUI::drawButtonBackground (juce::Graphics& g, juce::Button& btn,
 {
     const auto b  = btn.getLocalBounds().toFloat().reduced (1.0f);
     paintControlShape (g, btn, b, btn.getToggleState(), highlighted);
+}
+
+void ViolentUI::drawButtonText (juce::Graphics& g, juce::TextButton& btn, bool, bool)
+{
+    // "On" text takes the button's own colour, matching its tinted background.
+    juce::Colour onColour = btn.findColour (juce::TextButton::buttonOnColourId, false);
+    if (! onColour.isOpaque()) onColour = ViolentColours::accent;
+
+    const bool on = btn.getToggleState();
+    auto colour = on ? onColour : ViolentColours::text;
+    if (! btn.isEnabled())
+        colour = colour.withMultipliedAlpha ((float) VOLTA_OPACITY_DISABLED);
+
+    g.setFont (getTextButtonFont (btn, btn.getHeight()));
+    g.setColour (colour);
+    g.drawFittedText (btn.getButtonText(), btn.getLocalBounds().reduced (4, 0), juce::Justification::centred, 1);
 }
 
 void ViolentUI::drawComboBox (juce::Graphics& g, int width, int height, bool,
@@ -158,10 +183,12 @@ void ViolentUI::drawComboBox (juce::Graphics& g, int width, int height, bool,
     paintControlShape (g, box, b, box.isPopupActive(), hovered);
 
     const float arrowCX = (float) width - 15.0f, arrowCY = (float) height * 0.5f;
-    juce::Path arrow;
-    arrow.addTriangle (arrowCX - 4.0f, arrowCY - 2.5f, arrowCX + 4.0f, arrowCY - 2.5f, arrowCX, arrowCY + 3.0f);
+    juce::Path chevron;
+    chevron.startNewSubPath (arrowCX - 3.5f, arrowCY - 1.5f);
+    chevron.lineTo (arrowCX, arrowCY + 2.0f);
+    chevron.lineTo (arrowCX + 3.5f, arrowCY - 1.5f);
     g.setColour (ViolentColours::subtext);
-    g.fillPath (arrow);
+    g.strokePath (chevron, juce::PathStrokeType (1.4f, juce::PathStrokeType::curved, juce::PathStrokeType::rounded));
 }
 
 juce::Font ViolentUI::getLabelFont (juce::Label&)
@@ -171,7 +198,7 @@ juce::Font ViolentUI::getLabelFont (juce::Label&)
 
 juce::Font ViolentUI::getTextButtonFont (juce::TextButton&, int buttonHeight)
 {
-    return juce::Font (juce::FontOptions().withName ("SF Pro Text").withHeight (juce::jmin (12.0f, (float) buttonHeight * 0.6f)).withStyle ("Bold"));
+    return juce::Font (juce::FontOptions().withName ("SF Pro Text").withHeight (juce::jmin (12.0f, (float) buttonHeight * 0.6f)).withStyle ("Medium"));
 }
 
 juce::Font ViolentUI::getComboBoxFont (juce::ComboBox&)
@@ -186,7 +213,7 @@ juce::Font ViolentUI::getPopupMenuFont()
 
 float ViolentUI::animatedHoverAmount (juce::Component& c, bool isHovered)
 {
-    constexpr double durationMs = 100.0;
+    constexpr double durationMs = VOLTA_MOTION_DURATION * 1000.0;
     const double now = juce::Time::getMillisecondCounterHiRes();
     const float targetNow = isHovered ? 1.0f : 0.0f;
 
@@ -248,7 +275,7 @@ void ViolentUI::timerCallback()
 
         auto& props = comp->getProperties();
         const double start = (double) props.getWithDefault ("vHoverStart", 0.0);
-        if (now - start >= 100.0)
+        if (now - start >= VOLTA_MOTION_DURATION * 1000.0)
             animatingComponents.remove (i);
     }
 
