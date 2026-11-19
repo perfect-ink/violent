@@ -30,7 +30,7 @@ set_property(DIRECTORY "${juce_SOURCE_DIR}" APPEND PROPERTY
     COMPILE_OPTIONS "-Wno-deprecated-declarations")
 
 juce_add_plugin(Violent
-    COMPANY_NAME            "Violent Audio"
+    COMPANY_NAME            "Perfect Ink"
     BUNDLE_ID               "com.violentaudio.violent"
     IS_SYNTH                TRUE
     NEEDS_MIDI_INPUT        TRUE
