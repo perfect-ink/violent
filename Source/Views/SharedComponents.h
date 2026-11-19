@@ -1,38 +1,99 @@
 #pragma once
 #include <JuceHeader.h>
+#include <volta/VoltaLookAndFeel.h>
 #include "../PluginProcessor.h"
 
 //==============================================================================
+/** Violent's colour names, now drawn from the shared Volta look (kriogenx0/volta-native):
+    FireMail's quiet greys and ember accent, in macOS light or dark.
+
+    They are variables rather than constants because they change when macOS switches
+    between light and dark: ViolentUI calls apply() on the message thread. Nothing on
+    the audio thread reads them. Module colours (green, red, yellow, blue, teal) are
+    muted so they sit quietly next to the accent, with darker variants for light mode. */
 namespace ViolentColours
 {
-    static const juce::Colour background { 0xff0a0a0a };
-    static const juce::Colour surface    { 0xff1a1a1a };
-    static const juce::Colour overlay    { 0xff2c2c2c };
-    static const juce::Colour text       { 0xffe8e8e8 };
-    static const juce::Colour subtext    { 0xff8c8c8c };
-    static const juce::Colour accent     { 0xffff7a29 };
-    static const juce::Colour green      { 0xffa6e3a1 };
-    static const juce::Colour red        { 0xfff38ba8 };
-    static const juce::Colour yellow     { 0xfff9e2af };
-    static const juce::Colour blue       { 0xff89b4fa };
-    static const juce::Colour teal       { 0xff94e2d5 };
+    struct Set
+    {
+        juce::Colour background, surface, overlay, text, subtext, accent,
+                     green, red, yellow, blue, teal;
+    };
 
-    static constexpr float cornerRadius = 8.0f;
+    inline Set make (const volta::Palette& p, juce::Colour accentColour, bool dark)
+    {
+        // Opaque equivalents of the Volta control fills (secondary at 8% and 16%), because
+        // much of Violent paints surfaces on top of one another.
+        const auto fillRest  = p.canvas.overlaidWith (p.secondary.withAlpha ((float) VOLTA_OPACITY_CONTROL_FILL));
+        const auto fillHover = p.canvas.overlaidWith (p.secondary.withAlpha ((float) VOLTA_OPACITY_CONTROL_FILL_HOVER));
+
+        Set s { p.canvas, fillRest, fillHover, p.text, p.secondary, accentColour, {}, {}, {}, {}, {} };
+        if (dark)
+        {
+            s.green  = juce::Colour (0xff8fc79a);
+            s.red    = juce::Colour (0xffe0868f);
+            s.yellow = juce::Colour (0xffd9c38a);
+            s.blue   = juce::Colour (0xff86a8e0);
+            s.teal   = juce::Colour (0xff7fc4bb);
+        }
+        else
+        {
+            s.green  = juce::Colour (0xff3f8f55);
+            s.red    = juce::Colour (0xffc0485a);
+            s.yellow = juce::Colour (0xffa8862a);
+            s.blue   = juce::Colour (0xff3f6fc0);
+            s.teal   = juce::Colour (0xff2f8f86);
+        }
+        return s;
+    }
+
+    inline const Set initial = make (volta::Palette::dark(), volta::defaultAccent(), true);
+
+    inline juce::Colour background = initial.background;
+    inline juce::Colour surface    = initial.surface;
+    inline juce::Colour overlay    = initial.overlay;
+    inline juce::Colour text       = initial.text;
+    inline juce::Colour subtext    = initial.subtext;
+    inline juce::Colour accent     = initial.accent;
+    inline juce::Colour green      = initial.green;
+    inline juce::Colour red        = initial.red;
+    inline juce::Colour yellow     = initial.yellow;
+    inline juce::Colour blue       = initial.blue;
+    inline juce::Colour teal       = initial.teal;
+
+    inline Set current() { return { background, surface, overlay, text, subtext, accent, green, red, yellow, blue, teal }; }
+
+    inline void apply (const Set& s)
+    {
+        background = s.background; surface = s.surface; overlay = s.overlay;
+        text = s.text; subtext = s.subtext; accent = s.accent;
+        green = s.green; red = s.red; yellow = s.yellow; blue = s.blue; teal = s.teal;
+    }
+
+    static constexpr float cornerRadius = (float) VOLTA_RADIUS_CONTROL;
 }
 
 //==============================================================================
-class ViolentUI : public juce::LookAndFeel_V4, private juce::Timer
+/** The shared Volta look (volta::VoltaLookAndFeel), plus the Violent-specific drawing it
+    doesn't cover: per-module knob colours, centre-detented vertical faders, and toggle
+    buttons drawn as tinted pills rather than checkboxes. */
+class ViolentUI : public volta::VoltaLookAndFeel, private juce::Timer
 {
 public:
     ViolentUI();
+
+    /** Re-derives ViolentColours for the current appearance and moves any colour a
+        component set explicitly from the old value to the new one, so open views
+        follow a light/dark switch. */
+    void refreshColours (juce::Component& root);
     void drawRotarySlider (juce::Graphics&, int x, int y, int w, int h,
                            float sliderPos, float startAngle, float endAngle,
                            juce::Slider&) override;
     void drawLinearSlider (juce::Graphics&, int x, int y, int w, int h,
-                           float sliderPos, float, float,
+                           float sliderPos, float minSliderPos, float maxSliderPos,
                            juce::Slider::SliderStyle, juce::Slider&) override;
     void drawToggleButton (juce::Graphics&, juce::ToggleButton&, bool, bool) override;
     void drawButtonBackground (juce::Graphics&, juce::Button&, const juce::Colour&, bool, bool) override;
+    void drawButtonText (juce::Graphics&, juce::TextButton&, bool, bool) override;
     void drawComboBox (juce::Graphics&, int width, int height, bool isButtonDown,
                         int buttonX, int buttonY, int buttonW, int buttonH,
                         juce::ComboBox&) override;
@@ -47,7 +108,7 @@ private:
     void paintControlShape (juce::Graphics&, juce::Component&, juce::Rectangle<float> bounds,
                              bool isOn, bool isHovered);
 
-    // Hover/glow states fade in and out over ~100ms rather than snapping, so
+    // Hover/glow states fade in and out over 150 ms (the shared motion token) rather than snapping, so
     // every control that reads hover state goes through this: it returns a
     // 0..1 "how hovered" amount for `c` that eases towards isHovered's target,
     // storing its animation state directly on the component (so it survives

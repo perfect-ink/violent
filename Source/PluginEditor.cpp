@@ -7,6 +7,7 @@ ViolentAudioProcessorEditor::ViolentAudioProcessorEditor (ViolentAudioProcessor&
     : AudioProcessorEditor (p), audioProcessor (p), rack (p), minimap (p, rack, rackScaler, rackViewport)
 {
     setLookAndFeel (&laf);
+    laf.onAppearanceChanged = [this] { laf.refreshColours (*this); };
     // Width is fixed (only the zoom buttons change it, not dragging or the
     // native maximize button) — see updateWindowSize(), which re-pins the resize
     // limits' width whenever the zoom changes. Height is freely resizable,
