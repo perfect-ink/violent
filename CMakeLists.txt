@@ -31,7 +31,7 @@ set_property(DIRECTORY "${juce_SOURCE_DIR}" APPEND PROPERTY
 
 juce_add_plugin(Violent
     COMPANY_NAME            "Perfect Ink"
-    BUNDLE_ID               "com.violentaudio.violent"
+    BUNDLE_ID               "org.perfectink.violent"
     IS_SYNTH                TRUE
     NEEDS_MIDI_INPUT        TRUE
     NEEDS_MIDI_OUTPUT       FALSE
