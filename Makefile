@@ -127,6 +127,8 @@ help:
 	@echo "  make close                 close the running standalone app"
 	@echo "  make install               install both AU and VST3"
 	@echo "  make clean                 delete entire build/ directory"
+	@echo "  make rules                 sync shared agent rules into docs/rules/"
+	@echo "  make rules-check           show what make rules would change"
 	@echo ""
 	@echo "Prerequisites"
 	@echo "────────────────────────────────────────────"
@@ -134,3 +136,13 @@ help:
 	@echo ""
 	@echo "First build clones JUCE from GitHub (requires internet)."
 	@echo ""
+
+##@ Agent rules
+
+AGENT_RULES ?= $(HOME)/Sites/agent-rules
+
+rules: ## Sync shared agent rules from agent-rules into docs/rules/
+	@$(AGENT_RULES)/bin/agent-rules sync "$(CURDIR)"
+
+rules-check: ## Show what `make rules` would change (exit 1 if anything)
+	@$(AGENT_RULES)/bin/agent-rules check "$(CURDIR)"

@@ -1,41 +1,33 @@
-# AGENTS.md — Violent
+# violent
 
-Violent is a JUCE 8 synth/sampler plugin (AU, VST3, and a Standalone macOS app) in C++17, built with CMake and Ninja. JUCE is pulled with `FetchContent`. Open follow-ups live in [BACKLOG.md](BACKLOG.md).
+This file stays minimal. It loads the shared rules (synced from agent-rules into `docs/rules/`) and this project's settings and facts (`docs/project/`). Edit those, not this file.
 
-## Commands
+## Shared rules
 
-- `make setup`: install cmake/ninja via Homebrew if missing, then configure and build.
-- `make dev`: Debug build, kill any running instance, and launch the Standalone app (`build/Violent_artefacts/Debug/Standalone/Violent.app`).
-- `make build`: compile everything in `build/` (configure first with `make configure`).
-- `make install`: install the AU and VST3 into `~/Library/Audio/Plug-Ins`.
-- `make close`: quit the running Standalone app.
-- Tests: `make build`, then run `./build/ViolentTests_artefacts/Debug/ViolentTests`.
-- `make help` lists every target.
+<!-- agent-rules:begin -->
+Shared rules from agent-rules, synced by `make rules`. Don't edit them here; docs/project/ holds this repo's settings and facts, not rules.
 
-## Layout
+@docs/rules/project-settings.md
+@docs/rules/audio-plugins.md
+@docs/rules/backend.md
+@docs/rules/backlog-mode.md
+@docs/rules/backlog.md
+@docs/rules/code-requirements.md
+@docs/rules/conventions.md
+@docs/rules/deployment.md
+@docs/rules/design-principles.md
+@docs/rules/documentation.md
+@docs/rules/feature-docs.md
+@docs/rules/frontend.md
+@docs/rules/make-files.md
+@docs/rules/native.md
+@docs/rules/prototyping-mode.md
+@docs/rules/versioning.md
+<!-- agent-rules:end -->
 
-- `Source/PluginProcessor.*`, `Source/PluginEditor.*`: the JUCE plugin entry points.
-- `Source/SoundProcessing/`: synth, sampler, filter, effects, modulators, MIDI modifiers.
-- `Source/Views/`: rack, mixer, generator, effect, modulator, and spectrum views; shared widgets are in `SharedComponents.*`.
-- `Source/*Chain.h`: generator, FX, and modulator chains.
-- `Tests/`: JUCE `UnitTest` suites compiled into the `ViolentTests` console app.
-- `Assets/`: icon and bundled resources.
+## Project settings and facts
 
-## Conventions
+Settings and facts about this repo (its stack, layout, how to run it, where it deploys). They don't change the shared rules. Add one `@docs/project/<name>.md` line per file.
 
-- Register new `.cpp` files in `CMakeLists.txt` (`target_sources` for the plugin and, when tested, `ViolentTests`).
-- Fix compiler warnings in project code; JUCE's own deprecation warnings are already suppressed.
-- Nothing in the audio callback may allocate, lock, or log.
-- Read `BACKLOG.md` before build or tooling changes. `build/` may be pinned to a local JUCE copy, so don't `make clean` when offline.
-- Update `BACKLOG.md` when you finish or discover a follow-up.
-
-## Design principles
-
-Follow the [design principles](docs/rules/design-principles.md) for any UI work.
-
-## After changing code
-
-1. `make dev`
-2. `./build/ViolentTests_artefacts/Debug/ViolentTests`
-
-Commit messages are one short, imperative line, like the existing history.
+@docs/project/settings.md
+@docs/project/overview.md
