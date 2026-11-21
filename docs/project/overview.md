@@ -7,10 +7,10 @@ Violent is a JUCE 8 synth/sampler plugin (AU, VST3, and a Standalone macOS app) 
 - `make setup`: install cmake/ninja via Homebrew if missing, then configure and build.
 - `make dev`: Debug build, kill any running instance, and launch the Standalone app (`build/Violent_artefacts/Debug/Standalone/Violent.app`).
 - `make build`: compile everything in `build/` (configure first with `make configure`).
-- `make install`: install the AU and VST3 into `~/Library/Audio/Plug-Ins`.
+- `make install`: install the AU and VST3 into `~/Library/Audio/Plug-Ins` and the Standalone app into `/Applications`.
 - `make close`: quit the running Standalone app.
 - `make test`: build, then run the `ViolentTests` unit tests.
-- `make uninstall` / `make reinstall` / `make install-open`: remove, reinstall, or install and open the Standalone app in `/Applications` (`make install` also installs it there now).
+- `make uninstall` / `make reinstall` / `make install-open`: remove, reinstall, or install and open the Standalone app in `/Applications`.
 - `make help` lists every target.
 
 ### Layout
