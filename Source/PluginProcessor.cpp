@@ -297,7 +297,13 @@ void ViolentAudioProcessor::prepareToPlay (double sampleRate, int samplesPerBloc
         ring.assign ((size_t) waveformRingSize, 0.0f);
     waveformRingWritePos.fill (0);
 
-    previewSequence.clear(); // force a rebuild once processSpec.sampleRate is valid
+    builtPreviewPattern = -1; // force a rebuild once processSpec.sampleRate is valid
+
+    // Arp held notes grow on the audio thread, so reserve room for every
+    // MIDI note up front and never allocate there.
+    for (auto& perModifier : midiModState)
+        for (auto& state : perModifier)
+            state.heldNotes.reserve (128);
 
     prepared = true;
     updateEQ();
@@ -376,7 +382,9 @@ void ViolentAudioProcessor::processMidi (const juce::MidiBuffer& midi)
                     const auto& mm = midiModifiers[(size_t) m];
                     if (mm.enabled && mm.type == MidiModType::Arp && mm.routing[(size_t) s])
                     {
-                        midiModState[(size_t) m][(size_t) s].heldNotes.push_back (note);
+                        auto& held = midiModState[(size_t) m][(size_t) s].heldNotes;
+                        if (held.size() < held.capacity())   // reserved in prepareToPlay; never grow here
+                            held.push_back (note);
                         anyArp = true;
                     }
                 }
@@ -712,16 +720,28 @@ void ViolentAudioProcessor::renderMidiModifiers (int numSamples)
 //==============================================================================
 void ViolentAudioProcessor::setPreviewPattern (int pattern)
 {
+    // The audio thread notices the change and rebuilds the sequence itself.
     previewPattern.store (pattern, std::memory_order_relaxed);
-    previewSequence.clear();
 }
 
-void ViolentAudioProcessor::buildPreviewSequence()
+void ViolentAudioProcessor::addPreviewStep (std::initializer_list<int> notes) noexcept
 {
-    previewSequence.clear();
+    if (previewLength >= maxPreviewSteps) return;
+
+    auto& step = previewSequence[(size_t) previewLength++];
+    step.count = 0;
+    for (int note : notes)
+        if (step.count < (int) step.notes.size())
+            step.notes[(size_t) step.count++] = note;
+}
+
+void ViolentAudioProcessor::buildPreviewSequence() noexcept
+{
+    previewLength = 0;
 
     constexpr int root = 60; // C4
-    const auto pattern = static_cast<PreviewPattern> (previewPattern.load (std::memory_order_relaxed));
+    builtPreviewPattern = previewPattern.load (std::memory_order_relaxed);
+    const auto pattern  = static_cast<PreviewPattern> (builtPreviewPattern);
     double noteSeconds = 0.15;
 
     switch (pattern)
@@ -733,7 +753,7 @@ void ViolentAudioProcessor::buildPreviewSequence()
             constexpr int steps[] { 0, 3, 5, 7, 10, 12 };
             for (int oct = 0; oct < 2; ++oct)
                 for (int step : steps)
-                    previewSequence.push_back ({ lowRoot + oct * 12 + step });
+                    addPreviewStep ({ lowRoot + oct * 12 + step });
             break;
         }
 
@@ -742,7 +762,7 @@ void ViolentAudioProcessor::buildPreviewSequence()
             noteSeconds = 1.2;
             constexpr int steps[] { 0, 4, 7, 12, 7, 4 }; // root - 3rd - 5th - octave - 5th - 3rd
             for (int step : steps)
-                previewSequence.push_back ({ root + step });
+                addPreviewStep ({ root + step });
             break;
         }
 
@@ -756,7 +776,7 @@ void ViolentAudioProcessor::buildPreviewSequence()
                 { -3, 0, 4 },   // vi  (A minor)
             };
             for (auto& chord : progressions)
-                previewSequence.push_back ({ root + chord[0], root + chord[1], root + chord[2] });
+                addPreviewStep ({ root + chord[0], root + chord[1], root + chord[2] });
             break;
         }
 
@@ -769,14 +789,14 @@ void ViolentAudioProcessor::buildPreviewSequence()
             // C major scale, ascending across 3 octaves (plus the top C).
             for (int oct = 0; oct < 3; ++oct)
                 for (int step : majorScaleSteps)
-                    previewSequence.push_back ({ root + oct * 12 + step });
-            previewSequence.push_back ({ root + 3 * 12 });
+                    addPreviewStep ({ root + oct * 12 + step });
+            addPreviewStep ({ root + 3 * 12 });
 
             // C major pentatonic arpeggio, ascending across the same 3 octaves.
             for (int oct = 0; oct < 3; ++oct)
                 for (int step : pentatonicSteps)
-                    previewSequence.push_back ({ root + oct * 12 + step });
-            previewSequence.push_back ({ root + 3 * 12 });
+                    addPreviewStep ({ root + oct * 12 + step });
+            addPreviewStep ({ root + 3 * 12 });
             break;
         }
     }
@@ -789,7 +809,7 @@ void ViolentAudioProcessor::renderPreviewMidi (juce::MidiBuffer& midi, int numSa
 {
     if (! previewActive.load (std::memory_order_relaxed))
     {
-        if (previewNoteIsOn)
+        if (previewNoteIsOn && previewStepIndex >= 0)
         {
             for (int note : previewSequence[(size_t) previewStepIndex])
                 midi.addEvent (juce::MidiMessage::noteOff (1, note), 0);
@@ -801,8 +821,21 @@ void ViolentAudioProcessor::renderPreviewMidi (juce::MidiBuffer& midi, int numSa
         return;
     }
 
-    if (previewSequence.empty())
+    if (builtPreviewPattern != previewPattern.load (std::memory_order_relaxed))
+    {
+        // Pattern changed (or first run): release the sounding step before
+        // its notes are overwritten, then start the new pattern from the top.
+        if (previewNoteIsOn && previewStepIndex >= 0)
+            for (int note : previewSequence[(size_t) previewStepIndex])
+                midi.addEvent (juce::MidiMessage::noteOff (1, note), 0);
+        previewNoteIsOn        = false;
+        previewStepIndex       = -1;
+        previewSamplePos       = 0;
+        previewNextEventSample = 0;
         buildPreviewSequence();
+    }
+
+    if (previewLength == 0) return;
 
     int samplesProcessed = 0;
     while (samplesProcessed < numSamples)
@@ -828,7 +861,7 @@ void ViolentAudioProcessor::renderPreviewMidi (juce::MidiBuffer& midi, int numSa
         }
         else
         {
-            previewStepIndex = (previewStepIndex + 1) % (int) previewSequence.size();
+            previewStepIndex = (previewStepIndex + 1) % previewLength;
             for (int note : previewSequence[(size_t) previewStepIndex])
                 midi.addEvent (juce::MidiMessage::noteOn (1, note, (juce::uint8) 100), samplesProcessed);
             previewNoteIsOn         = true;

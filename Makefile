@@ -8,7 +8,7 @@ VST3_DEST      := $(HOME)/Library/Audio/Plug-Ins/VST3
 
 export MACOSX_DEPLOYMENT_TARGET := 13.0
 
-.PHONY: all setup configure build dev open kill-app close install install-au install-vst3 install-standalone run clean dependency-check help
+.PHONY: all setup configure build dev open kill-app close install install-au install-vst3 install-standalone uninstall reinstall install-open test run clean dependency-check help
 
 ## Default: build (Debug) + launch standalone
 all: dependency-check dev
@@ -59,6 +59,7 @@ install-vst3: build
 
 ## Install Standalone app to /Applications
 install-standalone: build
+	rm -rf /Applications/Violent.app
 	cp -r "$(ARTEFACTS_DIR)/Standalone/Violent.app" /Applications/
 	@echo "Installed Standalone → /Applications/Violent.app"
 
@@ -84,8 +85,23 @@ close:
 run: build
 	open "$(ARTEFACTS_DIR)/Standalone/Violent.app"
 
-## Install both AU and VST3
-install: install-au install-vst3
+## Install the AU, the VST3 and the Standalone app
+install: install-au install-vst3 install-standalone
+
+## Close the app and remove the installed AU, VST3 and Standalone app
+uninstall: close
+	rm -rf "$(AU_DEST)/Violent.component" "$(VST3_DEST)/Violent.vst3" /Applications/Violent.app
+
+## Uninstall, then install
+reinstall: uninstall install
+
+## Close the app, install, then open the installed Standalone app
+install-open: close install
+	open /Applications/Violent.app
+
+## Build and run the unit tests
+test: build
+	./$(BUILD_DIR)/ViolentTests_artefacts/$(BUILD_TYPE)/ViolentTests
 
 ## Delete the entire build directory (forces full reconfigure + rebuild)
 clean:
@@ -125,7 +141,11 @@ help:
 	@echo "  make install-standalone    copy .app to /Applications"
 	@echo "  make run                   launch standalone app from build dir"
 	@echo "  make close                 close the running standalone app"
-	@echo "  make install               install both AU and VST3"
+	@echo "  make install               install the AU, VST3 and standalone app"
+	@echo "  make uninstall             remove the installed AU, VST3 and app"
+	@echo "  make reinstall             uninstall, then install"
+	@echo "  make install-open          install, then open the installed app"
+	@echo "  make test                  build and run the unit tests"
 	@echo "  make clean                 delete entire build/ directory"
 	@echo "  make rules                 sync shared agent rules into docs/rules/"
 	@echo "  make rules-check           show what make rules would change"

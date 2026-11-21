@@ -289,11 +289,13 @@ void ViolentUI::timerCallback()
 LabelledKnob::LabelledKnob (const juce::String& name, juce::Colour colour)
     : knobColour (colour)
 {
-    slider.setSliderStyle (juce::Slider::RotaryHorizontalVerticalDrag);
+    slider.setSliderStyle (juce::Slider::RotaryVerticalDrag);
     slider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
     slider.setColour (juce::Slider::rotarySliderFillColourId, colour);
     slider.setRepaintsOnMouseActivity (true);
-    slider.setScrollWheelEnabled (false);
+    slider.setScrollWheelEnabled (true);
+    slider.setWantsKeyboardFocus (true);   // arrow keys step the value
+    slider.setTitle (name);                // spoken label for accessibility
     addAndMakeVisible (slider);
 
     nameLabel.setText (name, juce::dontSendNotification);
@@ -303,6 +305,15 @@ LabelledKnob::LabelledKnob (const juce::String& name, juce::Colour colour)
 
     valueLabel.setJustificationType (juce::Justification::centred);
     valueLabel.setColour (juce::Label::textColourId, ViolentColours::text);
+    valueLabel.setEditable (true, false, false);   // single click to type a value
+    valueLabel.setMouseCursor (juce::MouseCursor::IBeamCursor);
+    valueLabel.setTooltip ("Click to type a value");
+    valueLabel.onEditorShow = [this]
+    {
+        if (auto* editor = valueLabel.getCurrentTextEditor())
+            editor->setJustification (juce::Justification::centred);
+    };
+    valueLabel.onTextChange = [this] { commitTypedValue(); };
     addAndMakeVisible (valueLabel);
 
     slider.onValueChange = [this]
@@ -338,6 +349,22 @@ void LabelledKnob::attachTo (juce::AudioProcessorValueTreeState& apvts, const ju
 
     attachment = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
         apvts, parameterID, slider);
+    valueLabel.setText (slider.getTextFromValue (slider.getValue()), juce::dontSendNotification);
+
+    // Double-click resets to the default the parameter itself defines.
+    if (auto* parameter = apvts.getParameter (parameterID))
+        slider.setDoubleClickReturnValue (true, parameter->convertFrom0to1 (parameter->getDefaultValue()));
+}
+
+void LabelledKnob::commitTypedValue()
+{
+    const auto typed = valueLabel.getText().trim();
+
+    // Text that isn't a number leaves the value unchanged. Units are fine:
+    // the parameter's own parser reads the leading number ("50%" == "50").
+    if (typed.containsAnyOf ("0123456789"))
+        slider.setValue (slider.getValueFromText (typed), juce::sendNotificationSync);   // setValue clamps to the range
+
     valueLabel.setText (slider.getTextFromValue (slider.getValue()), juce::dontSendNotification);
 }
 

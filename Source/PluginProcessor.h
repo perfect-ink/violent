@@ -361,10 +361,24 @@ private:
     // PreviewPattern) so the synth can be heard without a MIDI keyboard.
     // Each step is a set of notes so chords can fire together.
     // -----------------------------------------------------------------------
-    void buildPreviewSequence();
+    void buildPreviewSequence() noexcept;
+    void addPreviewStep (std::initializer_list<int> notes) noexcept;
     void renderPreviewMidi (juce::MidiBuffer& midi, int numSamples);
 
-    std::vector<std::vector<int>> previewSequence;
+    // Fixed storage, so building or switching the pattern on the audio
+    // thread never allocates. The audio thread is the only reader and
+    // writer; the UI only stores previewPattern.
+    struct PreviewStep
+    {
+        std::array<int, 3> notes {};
+        int count = 0;
+        const int* begin() const noexcept { return notes.data(); }
+        const int* end()   const noexcept { return notes.data() + count; }
+    };
+    static constexpr int maxPreviewSteps = 48;
+    std::array<PreviewStep, maxPreviewSteps> previewSequence {};
+    int  previewLength         = 0;
+    int  builtPreviewPattern   = -1;   // -1 = rebuild before the next step
     int  previewStepIndex      = -1;
     int  previewSamplePos      = 0;
     int  previewNextEventSample = 0;

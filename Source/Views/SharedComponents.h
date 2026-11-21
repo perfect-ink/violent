@@ -439,40 +439,43 @@ private:
 };
 
 //==============================================================================
-/** A rotary Slider whose effective drag distance is clamped to a small
-    margin beyond its own bounds — dragging the cursor further away has no
-    additional effect, so the cursor never wanders far from the knob it's
-    adjusting, even across a long drag. */
+/** A rotary Slider driven by vertical drags only (never rotary dragging):
+    dragging up raises the value and down lowers it, measured from the last
+    drag position so the knob never jumps. Holding Option (or Shift) while
+    dragging gives fine control. Scroll wheel and arrow keys also step it. */
 class ConstrainedKnobSlider : public juce::Slider
 {
 public:
-    void resized() override
+    void mouseDown (const juce::MouseEvent& e) override
     {
-        Slider::resized();
-
-        // Slider's default drag distance for the full 0..1 range is 250px
-        // (see Slider::Pimpl::pixelsForFullDragExtent) — far more than the
-        // small area mouseDrag() clamps the cursor to below. Without this,
-        // the clamp leaves only a small fraction of the range reachable
-        // before the knob stops responding, which feels like the cursor has
-        // come loose from the control. Matching the sensitivity to the
-        // clamped travel distance keeps the whole range reachable within it.
-        setMouseDragSensitivity (juce::jmax (10, juce::jmin (getWidth(), getHeight())
-                                                      + (int) (margin * 2.0f)));
+        lastDragY = e.position.y;
+        Slider::mouseDown (e);   // starts the host gesture via the attachment
     }
 
     void mouseDrag (const juce::MouseEvent& e) override
     {
-        const auto bounds = getLocalBounds().toFloat().expanded (margin);
-        Slider::mouseDrag (e.withNewPosition (bounds.getConstrainedPoint (e.position)));
+        if (! isEnabled()) return;
+
+        const bool fine  = e.mods.isAltDown() || e.mods.isShiftDown();
+        const auto delta = (lastDragY - e.position.y) / pixelsForFullRange * (fine ? fineFactor : 1.0f);
+        lastDragY = e.position.y;
+
+        const auto proportion = juce::jlimit (0.0, 1.0, valueToProportionOfLength (getValue()) + (double) delta);
+        setValue (proportionOfLengthToValue (proportion), juce::sendNotificationSync);
     }
 
 private:
-    static constexpr float margin = 10.0f;
+    static constexpr float pixelsForFullRange = 200.0f;
+    static constexpr float fineFactor         = 0.1f;
+    float lastDragY = 0.0f;
 };
 
 //==============================================================================
-/** Rotary knob with name above and value below, always visible. Owns its own
+/** Rotary knob with name above and value below, always visible. Clicking the
+    value turns it into a text field for an exact value (Return or clicking
+    away commits, Escape cancels, units are accepted, out-of-range values are
+    clamped and non-numbers are ignored). Double-clicking the knob resets the
+    parameter to its default. Owns its own
     APVTS attachment (bind with attachTo()) so every call site gets consistent
     wiring instead of each owner hand-rolling a SliderAttachment. Also polls
     whether it's the current target of any enabled Modulator and, if so,
@@ -502,6 +505,7 @@ private:
     juce::String paramID;
     ViolentAudioProcessor* ownerProcessor = nullptr;
 
+    void commitTypedValue();
     void timerCallback() override;
 };
 
