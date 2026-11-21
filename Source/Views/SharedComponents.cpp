@@ -70,43 +70,6 @@ void ViolentUI::drawRotarySlider (juce::Graphics& g,
     VoltaLookAndFeel::drawRotarySlider (g, x, y, width, height, sliderPos, rotaryStartAngle, rotaryEndAngle, slider);
 }
 
-void ViolentUI::drawLinearSlider (juce::Graphics& g,
-    int x, int y, int width, int height,
-    float sliderPos, float minPos, float maxPos,
-    juce::Slider::SliderStyle style, juce::Slider& slider)
-{
-    if (style != juce::Slider::LinearVertical)
-    {
-        VoltaLookAndFeel::drawLinearSlider (g, x, y, width, height, sliderPos, minPos, maxPos, style, slider);
-        return;
-    }
-
-    // Centre-detented fader: fills up or down from the middle.
-    const float trackW  = 3.0f;
-    const float centreX = (float) x + (float) width * 0.5f;
-    const float top     = (float) y + 8.0f;
-    const float bot     = (float) (y + height) - 8.0f;
-    const float mid     = top + (bot - top) * 0.5f;
-    const float alpha   = slider.isEnabled() ? 1.0f : (float) VOLTA_OPACITY_DISABLED;
-
-    g.setColour (ViolentColours::overlay.withMultipliedAlpha (alpha));
-    g.fillRoundedRectangle (centreX - trackW * 0.5f, top, trackW, bot - top, trackW * 0.5f);
-    g.setColour (volta::divider (palette()));
-    g.drawHorizontalLine ((int) mid, centreX - 6.0f, centreX + 6.0f);
-
-    const juce::Colour fill = valueColour (slider).withMultipliedAlpha (alpha);
-    g.setColour (sliderPos < mid ? fill : fill.withMultipliedAlpha (0.6f));
-    g.fillRoundedRectangle (centreX - trackW * 0.5f, juce::jmin (sliderPos, mid), trackW, std::abs (mid - sliderPos), trackW * 0.5f);
-
-    // Flat thumb with a hairline edge, darker edge on hover.
-    const auto thumb = juce::Rectangle<float> (20.0f, 10.0f).withCentre ({ centreX, sliderPos });
-    g.setColour (palette().surface.withMultipliedAlpha (alpha));
-    g.fillRoundedRectangle (thumb, (float) VOLTA_RADIUS_CHECKBOX);
-    const bool active = slider.isEnabled() && slider.isMouseOverOrDragging();
-    g.setColour (palette().secondary.withAlpha ((active ? 0.5f : (float) VOLTA_OPACITY_DIVIDER) * alpha));
-    g.drawRoundedRectangle (thumb.reduced (0.5f), (float) VOLTA_RADIUS_CHECKBOX, 1.0f);
-}
-
 void ViolentUI::paintControlShape (juce::Graphics& g, juce::Component& c, juce::Rectangle<float> b,
                                              bool isOn, bool isHovered)
 {

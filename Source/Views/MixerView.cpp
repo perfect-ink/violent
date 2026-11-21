@@ -11,12 +11,8 @@ MixerChannel::MixerChannel (ViolentAudioProcessor& p, int generatorIdx)
     nameLabel.setColour (juce::Label::textColourId, ViolentColours::subtext);
     addAndMakeVisible (nameLabel);
 
-    levelSlider.setSliderStyle (juce::Slider::LinearVertical);
-    levelSlider.setTextBoxStyle (juce::Slider::NoTextBox, false, 0, 0);
-    levelSlider.setScrollWheelEnabled (false);
-    addAndMakeVisible (levelSlider);
-    levelAtt = std::make_unique<juce::AudioProcessorValueTreeState::SliderAttachment> (
-        processor.apvts, ParamIDs::generatorLevel (generator), levelSlider);
+    addAndMakeVisible (levelKnob);
+    levelKnob.attachTo (processor.apvts, ParamIDs::generatorLevel (generator));
 
     addAndMakeVisible (panKnob);
     panKnob.attachTo (processor.apvts, ParamIDs::generatorPan (generator));
@@ -29,9 +25,13 @@ void MixerChannel::resized()
     auto a = getLocalBounds().reduced (4, 4);
     nameLabel.setBounds (a.removeFromTop (16));
     a.removeFromTop (2);
-    panKnob.setBounds (a.removeFromBottom (52));
-    a.removeFromBottom (2);
-    levelSlider.setBounds (a);
+    a.removeFromRight (8); // level meter, drawn in paint()
+
+    // Level above Pan, each with its name and value.
+    const int knobH = (a.getHeight() - 4) / 2;
+    levelKnob.setBounds (a.removeFromTop (knobH));
+    a.removeFromTop (4);
+    panKnob.setBounds (a.removeFromTop (knobH));
 }
 
 void MixerChannel::paint (juce::Graphics& g)

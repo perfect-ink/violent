@@ -4,8 +4,8 @@
 #include "SharedComponents.h"
 
 //==============================================================================
-/** One channel strip in the mixer: name, live level meter, and a fader
-    bound to that generator's Level parameter. */
+/** One channel strip in the mixer: name, live level meter, and Level and
+    Pan knobs bound to that generator's parameters. */
 class MixerChannel : public juce::Component, private juce::Timer
 {
 public:
@@ -21,8 +21,7 @@ private:
     int generator;
 
     juce::Label  nameLabel;
-    juce::Slider levelSlider;
-    std::unique_ptr<juce::AudioProcessorValueTreeState::SliderAttachment> levelAtt;
+    LabelledKnob levelKnob { "Level", ViolentColours::accent };
     LabelledKnob panKnob { "Pan", ViolentColours::yellow };
 
     JUCE_DECLARE_NON_COPYABLE_WITH_LEAK_DETECTOR (MixerChannel)
